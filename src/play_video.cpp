@@ -16,11 +16,12 @@
 
 //---------------------------------------------
 
-#define MAX_FEATURE_COUNT 200
+int MAX_FEATURE_COUNT = 200;
 #define PRINT_ALL 1
-#define PRINT_FEATURES_LOCATION 1
-#define SHOW_VIDEO_FEED 0
-#define SHOW_FLOW 1
+int PRINT_FEATURES_LOCATION = 0;
+int SHOW_VIDEO_FEED = 0;
+int SHOW_FLOW = 0;
+int SAVE_FRAMES = 0;
 
 //---------------------------------------------
 
@@ -81,23 +82,42 @@ void epipolarlines(Mat leftImage, Mat rightImage, vector<Point2f> imagePointsLef
     }
 }*/
 
+namespace patch //std::to_string patch: there's a known bug with to_string not being a member of std when compiling
+{
+    template < typename T > std::string to_string( const T& n )
+    {
+        std::ostringstream stm ;
+        stm << n ;
+        return stm.str() ;
+    }
+}
+
+int cntr = 0;
 //----------------------- Image Callback - runs when a new image is available
 void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 {
-
   try
   { 
 //----------------------- Start
 
 	image = cv::imdecode(cv::Mat(msg->data),1);//convert compressed image data to cv::Mat
-	cvtColor( image, image, CV_BGR2GRAY );
-	image = 3* (image + 0);
 
+	cvtColor( image, image, CV_BGR2GRAY );
+
+	if(SAVE_FRAMES == 1){
+		std::string savingName = "../imgcamcalib/"+patch::to_string(++cntr)+".jpg";
+		cv::imwrite(savingName, image);
+		//printf(savingName);
+		printf("\nImage Saved\n");
+	}
+
+	image = 3* (image + 0);
+	
 	Mat img;
 	cv::resize(image, img, cv::Size(), 0.25, 0.25);
 	//if(SHOW_VIDEO_FEED == 1)cv::imshow("view" , img);
 	cv::waitKey(10);
-
+	
 //----------------------- Detector parameters (Shi-Tomasi corner detector)
 
 	double qualityLevel = 0.03;
@@ -356,14 +376,53 @@ for(std::size_t i=0;i<lines.size();i=i+1)
   }
 }
 
+//----------------------- HELP PAGE
+
+void fhelp(void){
+	printf("\n---------------- [HELP PAGE] ----------------");
+	printf("\n[Arguments]");
+	printf("\n-bag [topic name] : used to subscribe to a specific topic (video feed must be compressed)");
+	printf("\n-maxfcnt [number] : max features count allowed");
+	printf("\n-pfloc            : print feature location in video feed");
+	printf("\n-vfeed            : enable video feed");
+	printf("\n-oflow            : enable video feed with optical flow");
+	printf("\n-save             : save frames in a folder");	
+	printf("\n---------------------------------------------\n\n");
+	return;
+}
+
+
+//----------------------- MAIN
+
 int main(int argc, char **argv)
 {
-	
+  std::string rosbagstring = "/camera_meio/led/compressed"; 
+
+  if(argc > 0){
+	for(int i=0; i < argc; i++){
+		if (strcmp(argv[i], "-bag") == 0)std::string rosbagstring = argv[i+1];
+		if (strcmp(argv[i], "-maxfcnt") == 0)MAX_FEATURE_COUNT = atoi(argv[i+1]);
+		if (strcmp(argv[i], "-pfloc") == 0)PRINT_FEATURES_LOCATION = 1;
+		if (strcmp(argv[i], "-vfeed") == 0)SHOW_VIDEO_FEED = 1;
+		if (strcmp(argv[i], "-oflow") == 0)SHOW_FLOW = 1;
+		if (strcmp(argv[i], "-save") == 0)SAVE_FRAMES = 1;
+		if (strcmp(argv[i], "-help") == 0){fhelp();return 0;}
+	}
+  }
+
+/*
+if((rosbagstring.empty()) && (helppage = 0)){
+	printf("\n\nERROR: add '-bag [topic name]' as arguments to subscribe to a video feed topic. \nVideo must be compressed\n\n");
+	return 0;
+}
+*/
+
+
   ros::init(argc, argv, "image_listener");
   ros::NodeHandle nh;
   //cv::namedWindow("view");
-  cv::startWindowThread();
-  ros::Subscriber sub = nh.subscribe("/camera_meio/led/compressed", 1, imageCallback);
+  cv::startWindowThread();//"/camera_meio/led/compressed"
+  ros::Subscriber sub = nh.subscribe(rosbagstring, 1, imageCallback);
   ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_rt_data", 1000);
   //ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_2d_data", 1000);
   

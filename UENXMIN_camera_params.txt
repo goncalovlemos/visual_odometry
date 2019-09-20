@@ -1,0 +1,38 @@
+
+UNEXMIN_cameraParams =
+
+  cameraParameters with properties:
+
+   Camera Intrinsics
+                    IntrinsicMatrix: [3×3 double]
+                        FocalLength: [1.1055e+03 1.1051e+03]
+                     PrincipalPoint: [1.0376e+03 834.9490]
+                               Skew: -1.1602
+                   RadialDistortion: [-0.3554 0.2202 -0.1126]
+               TangentialDistortion: [-0.0041 0.0028]
+                          ImageSize: [1544 2056]
+
+   Camera Extrinsics
+                   RotationMatrices: [3×3×80 double]
+                 TranslationVectors: [80×3 double]
+
+   Accuracy of Estimation
+              MeanReprojectionError: 0.3063
+                 ReprojectionErrors: [28×2×80 double]
+                  ReprojectedPoints: [28×2×80 double]
+
+   Calibration Settings
+                        NumPatterns: 80
+                        WorldPoints: [28×2 double]
+                         WorldUnits: 'millimeters'
+                       EstimateSkew: 1
+    NumRadialDistortionCoefficients: 3
+       EstimateTangentialDistortion: 1
+
+
+estimationErrors =
+
+  cameraCalibrationErrors with properties:
+
+    IntrinsicsErrors: [1×1 intrinsicsEstimationErrors]
+    ExtrinsicsErrors: [1×1 extrinsicsEstimationErrors]
