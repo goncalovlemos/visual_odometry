@@ -13,7 +13,6 @@
 #include <cv_bridge/cv_bridge.h>
 
 #include <ctype.h>
-
 //---------------------------------------------
 
 int MAX_FEATURE_COUNT = 200;
@@ -33,7 +32,20 @@ using namespace std;
 int needtoInit = 1;
 Mat mask;
 cv::Mat image, previmage;
+
+cv::Mat imagef, previmagef;
+cv::Mat imagee, previmagee;
+cv::Mat imaged, previmaged;
+
 vector<Point2f> corners, prevcorners;
+
+std::string rosbagstring = "/camera_meio/led/compressed"; 
+std::string nodename = "/camera_meio"; 
+
+vector<Point2f> cornersf, prevcornersf;
+vector<Point2f> cornerse, prevcornerse;
+vector<Point2f> cornersd, prevcornersd;
+
 int ofcnt = 0;
 
 //----------------------- EXTRA FUNCTIONS HERE
@@ -92,12 +104,45 @@ namespace patch //std::to_string patch: there's a known bug with to_string not b
     }
 }
 
+Mat correctGamma( Mat& img, double gamma ) {
+ double inverse_gamma = 1.0 / gamma;
+ 
+ Mat lut_matrix(1, 256, CV_8UC1 );
+ uchar * ptr = lut_matrix.ptr();
+ for( int i = 0; i < 256; i++ )
+   ptr[i] = (int)( pow( (double) i / 255.0, inverse_gamma ) * 255.0 );
+ 
+ Mat result;
+ LUT( img, lut_matrix, result );
+ 
+ return result;
+}
+
 int cntr = 0;
 //----------------------- Image Callback - runs when a new image is available
 void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 {
   try
   { 
+	const char *cstr = rosbagstring.c_str();
+	if(strcmp(cstr,"/camera_meio/led/compressed")==0){
+		std::swap(corners, cornersf);
+		std::swap(prevcorners, prevcornersf);
+		cv::swap(image, imagef);
+		cv::swap(previmage, previmagef);
+	}
+	if(strcmp(cstr,"/camera_direita/led/compressed")==0){
+		std::swap(corners, cornersd);
+		std::swap(prevcorners, prevcornersd);
+		cv::swap(image, imaged);
+		cv::swap(previmage, previmaged);
+	}
+	if(strcmp(cstr,"/camera_esquerda/led/compressed")==0){
+		std::swap(corners, cornerse);
+		std::swap(prevcorners, prevcornerse);
+		cv::swap(image, imagee);
+		cv::swap(previmage, previmagee);
+	}
 //----------------------- Start
 
 	image = cv::imdecode(cv::Mat(msg->data),1);//convert compressed image data to cv::Mat
@@ -111,8 +156,9 @@ void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 		printf("\nImage Saved\n");
 	}
 
-	image = 3* (image + 0);
-	
+	//image = 0.25* (image + 100);
+	image = correctGamma(image, 1.2);	
+
 	Mat img;
 	cv::resize(image, img, cv::Size(), 0.25, 0.25);
 	//if(SHOW_VIDEO_FEED == 1)cv::imshow("view" , img);
@@ -145,7 +191,19 @@ void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 	cv::Mat image_copy = image;
 
 //----------------------- Need to Init
-	
+	int ndetected = 0;
+	if(ndetected < 50){
+		goodFeaturesToTrack( previmage,
+		prevcorners,
+		MAX_FEATURE_COUNT,
+		qualityLevel,
+		minDistance,
+		Mat(),
+		blockSize,
+		useHarrisDetector,
+		k );
+	}
+
 	if (needtoInit == 1){
 		prevcorners = corners;
 		previmage = image;
@@ -153,31 +211,16 @@ void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 		mask = Mat::zeros(image.size(), image.type());
 	}
 
-
-//if (needtoInit == 0){
-//	ROS_INFO("( %.2f , %.2f )\n",corners[1].x,corners[1].y);
-//	ROS_INFO("( %.2f , %.2f )\n\n",prevcorners[1].x,prevcorners[1].y);
-//}
-
-//----------------------- LK parameters
-
-	std::vector<uchar> status;
-	std::vector<float> err;
-	//TermCriteria termcrit(TermCriteria::COUNT|TermCriteria::EPS,20,0.003); //20 max count e 0.03 desired accuracy
-	//Size subPixWinSize(10,10),winsize(31,31);
-
 //----------------------- LK
 	
-	//Mat imPyr1, imPyr2;
-	//int maxLvl = 3;
-	//maxLvl = buildOpticalFlowPyramid(previmage, imPyr1, winSize, maxLvl, true);
-    	//maxLvl = buildOpticalFlowPyramid(image, imPyr2, winSize, maxLvl, true);
+	std::vector<uchar> status;
+	std::vector<float> err;
 
 	calcOpticalFlowPyrLK(previmage, image, prevcorners, corners, status, err, winSize, 3, termcrit, 0, 0.001);
 
 //----------------------- Draw features
 
-int ndetected = 0;
+ndetected = 0;
 	for( int i = 0; i < corners.size() ; i++ ){ 
 	if(status[i] == 1){
 		circle( image_copy, Point( corners[i].x, corners[i].y ), 5,  Scalar(0), 2, 8, 0 );
@@ -206,7 +249,7 @@ int ndetected = 0;
 		colors.push_back(Scalar(r,g,b));
 	}
         vector<Point2f> good_new;
-       for(int i = 0; i < corners.size(); i++){
+       for(int i = 0; i < corners.size(); i = i + 5){
 
             // Select good points
             if(err[i] <= 100){
@@ -335,8 +378,11 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 */
 //----------------------- GET POSE
 
-	double focal = 1.0; // focal = camera focal length
-	cv::Point2d pp(0.0, 0.0); // pp = principle point;
+	//FocalLength: [1.1055e+03 1.1051e+03]
+	//PrincipalPoint: [1.0376e+03 834.9490]
+
+	double focal = 1.1055e+03; // focal = camera focal length
+	cv::Point2d pp(1.0376e+03, 834.9490); // pp = principle point;
 	Mat E, R, t, mask;
 
 	// Mat E = K.t() * F * K; // K = camera intrinsic matrix & F = Fundamental Matrix
@@ -369,6 +415,25 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 
 //----------------------- End
 
+	if(strcmp(cstr,"/camera_meio/led/compressed")==0){
+		std::swap(cornersf, corners);
+		std::swap(prevcornersf, prevcorners);
+		cv::swap(imagef, image);
+		cv::swap(previmagef, previmage);
+	}
+	if(strcmp(cstr,"/camera_direita/led/compressed")==0){
+		std::swap(cornersd, corners);
+		std::swap(prevcornersd, prevcorners);
+		cv::swap(imaged, image);
+		cv::swap(previmaged, previmage);
+	}
+	if(strcmp(cstr,"/camera_esquerda/led/compressed")==0){
+		std::swap(cornerse, corners);
+		std::swap(prevcornerse, prevcorners);
+		cv::swap(imagee, image);
+		cv::swap(previmagee, previmage);
+	}
+
   }
   catch (cv_bridge::Exception& e)
   {
@@ -396,11 +461,13 @@ void fhelp(void){
 
 int main(int argc, char **argv)
 {
-  std::string rosbagstring = "/camera_meio/led/compressed"; 
-
+ 
   if(argc > 0){
 	for(int i=0; i < argc; i++){
-		if (strcmp(argv[i], "-bag") == 0)std::string rosbagstring = argv[i+1];
+		if (strcmp(argv[i], "-bag") == 0){
+			rosbagstring = argv[i+1];			
+			cout << "STRING:" << endl << rosbagstring << endl << endl;
+		}
 		if (strcmp(argv[i], "-maxfcnt") == 0)MAX_FEATURE_COUNT = atoi(argv[i+1]);
 		if (strcmp(argv[i], "-pfloc") == 0)PRINT_FEATURES_LOCATION = 1;
 		if (strcmp(argv[i], "-vfeed") == 0)SHOW_VIDEO_FEED = 1;
@@ -417,8 +484,12 @@ if((rosbagstring.empty()) && (helppage = 0)){
 }
 */
 
+	const char *cstr = rosbagstring.c_str();
+	if(strcmp(cstr,"/camera_meio/led/compressed")==0)nodename = "camera_meio"; 
+	if(strcmp(cstr,"/camera_direita/led/compressed")==0)nodename = "camera_direita"; 
+	if(strcmp(cstr,"/camera_esquerda/led/compressed")==0)nodename = "camera_esquerda"; 
 
-  ros::init(argc, argv, "image_listener");
+  ros::init(argc, argv, nodename);
   ros::NodeHandle nh;
   //cv::namedWindow("view");
   cv::startWindowThread();//"/camera_meio/led/compressed"
