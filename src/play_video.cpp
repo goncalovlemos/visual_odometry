@@ -283,16 +283,16 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 	destroyAllWindows;
 
 //----------------------- PUBLISH DATA
-
+/*
 	std_msgs::Float32MultiArray dat;
 
 	dat.layout.dim.push_back(std_msgs::MultiArrayDimension());
 	dat.layout.dim.push_back(std_msgs::MultiArrayDimension());
 	dat.layout.dim[0].label = "height";
 	dat.layout.dim[1].label = "width";
-	float H = prevcorners.size();
+	int H = prevcorners.size();
 	dat.layout.dim[0].size = H;
-	float W = 2;
+	int W = 2;
 	dat.layout.dim[1].size = W;
 	dat.layout.dim[0].stride = H*W;
 	dat.layout.dim[1].stride = W;
@@ -301,16 +301,51 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 	ros::NodeHandle nh;
 	ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_2d_data", 1000);
 
+		dat.data.push_back(ndetected);
 	for (int i=0; i<H; i++){
-	for (int j=0; j<W; j++){
 		dat.data.push_back(prevcorners[i].x);
-		dat.data.push_back(prevcorners[j].y);
-	}
+		dat.data.push_back(prevcorners[i].y);
 	}
 
 	pub.publish(dat);
 	dat.data.clear();
 
+
+	//printf("\n\n\n\n %d \n\n\n\n ",ndetected); //debug
+*/
+//----------------------- GET POSE
+
+	double focal = 1.0; // focal = camera focal length
+	cv::Point2d pp(0.0, 0.0); // pp = principle point;
+	Mat E, R, t, mask;
+
+	// Mat E = K.t() * F * K; // K = camera intrinsic matrix & F = Fundamental Matrix
+	E = findEssentialMat(prevcorners, corners, focal, pp, RANSAC, 0.999, 1.0, mask);
+	recoverPose(E, corners, prevcorners, R, t, focal, pp, mask);
+
+
+
+	printf("\n\nROTATION AND TRANSLATION MATRIX:\n\n");
+	cout << "R = "<< endl << " "  << R << endl << endl;
+	cout << "t = "<< endl << " "  << t << endl << endl;
+	printf("\n\n");
+
+//----------------------- PUBLISH R&t DATA
+
+	std_msgs::Float32MultiArray dat;
+
+	ros::NodeHandle n;
+	ros::Publisher pub = n.advertise<std_msgs::Float32MultiArray>("uwv_rt_data", 1000);
+
+	for(int i = 0; i<3; i++){
+		dat.data.push_back(t.at<double>(i));
+	}
+	for(int i = 0; i<9; i++){
+		dat.data.push_back(R.at<double>(i));
+	}
+
+	pub.publish(dat);
+	dat.data.clear();
 
 //----------------------- End
 
@@ -329,8 +364,8 @@ int main(int argc, char **argv)
   //cv::namedWindow("view");
   cv::startWindowThread();
   ros::Subscriber sub = nh.subscribe("/camera_meio/led/compressed", 1, imageCallback);
-
-  ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_2d_data", 1000);
+  ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_rt_data", 1000);
+  //ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_2d_data", 1000);
   
 
   printf("\n\nWaiting for video input with '/camera_meio/led/compressed' topic...\n");

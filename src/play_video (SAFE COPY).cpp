@@ -2,6 +2,7 @@
 #include <sensor_msgs/CompressedImage.h>
 #include <sstream>
 #include <iostream>
+#include <std_msgs/Float32MultiArray.h>
 
 #include <opencv2/video/tracking.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -281,7 +282,39 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 	cv::swap(previmage, image);
 	destroyAllWindows;
 
+//----------------------- PUBLISH DATA
+
+	std_msgs::Float32MultiArray dat;
+
+	dat.layout.dim.push_back(std_msgs::MultiArrayDimension());
+	dat.layout.dim.push_back(std_msgs::MultiArrayDimension());
+	dat.layout.dim[0].label = "height";
+	dat.layout.dim[1].label = "width";
+	int H = prevcorners.size();
+	dat.layout.dim[0].size = H;
+	int W = 2;
+	dat.layout.dim[1].size = W;
+	dat.layout.dim[0].stride = H*W;
+	dat.layout.dim[1].stride = W;
+	dat.layout.data_offset = 0;
+
+	ros::NodeHandle nh;
+	ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_2d_data", 1000);
+
+		dat.data.push_back(ndetected);
+	for (int i=0; i<H; i++){
+		dat.data.push_back(prevcorners[i].x);
+		dat.data.push_back(prevcorners[i].y);
+	}
+
+	pub.publish(dat);
+	dat.data.clear();
+
+
+	//printf("\n\n\n\n %d \n\n\n\n ",ndetected); //debug
+
 //----------------------- End
+
   }
   catch (cv_bridge::Exception& e)
   {
@@ -297,6 +330,10 @@ int main(int argc, char **argv)
   //cv::namedWindow("view");
   cv::startWindowThread();
   ros::Subscriber sub = nh.subscribe("/camera_meio/led/compressed", 1, imageCallback);
+
+  ros::Publisher pub = nh.advertise<std_msgs::Float32MultiArray>("uwv_2d_data", 1000);
+  
+
   printf("\n\nWaiting for video input with '/camera_meio/led/compressed' topic...\n");
   ros::spin();
   //cv::destroyWindow("view");

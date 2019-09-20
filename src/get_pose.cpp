@@ -38,19 +38,22 @@ int ofcnt = 0;
 void calcCallback(const std_msgs::Float32MultiArray dat)
 {
 
-	int W = 70;
-	//int W = dat.layout.dim[1]; //change for height
-	printf("|-------------------------------------------------------|\n\n");
-	int cnt = 1;
-	for (int i=0; i<W; i = i + 2){ 
+	//int H = dat.layout.dim[0].size;
+	int H = dat.data[0];
+	printf("\n\n[%i features] \n|-------------------------------------------------------|\n", H);
+	int cnt = 0;
+
+	for (int i=1; i < (H*2); i = i + 2){
+		cnt++;
+
+		if(dat.data[i] > 0 && dat.data[i+1] > 0){
 		float cx = dat.data[i];
 		float cy = dat.data[i+1];
 		printf("Feature %d: ( %f , %f ) \n",cnt,cx,cy);
-		cnt++;
-		//dat.data.push_back(prevcorners[i].x);
-		//dat.data.push_back(prevcorners[j].y);
+		}
+		//guardar dados num vetor unico
 	}
-
+	//dat.data.clear();
 
 
 }
