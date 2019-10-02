@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iostream>
 #include <std_msgs/Float32MultiArray.h>
+#include <std_msgs/Header.h>
+#include <sys/time.h>
 
 #include <opencv2/video/tracking.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -15,7 +17,7 @@
 #include <ctype.h>
 //---------------------------------------------
 
-int MAX_FEATURE_COUNT = 200;
+int MAX_FEATURE_COUNT = 500;
 #define PRINT_ALL 1
 int PRINT_FEATURES_LOCATION = 0;
 int SHOW_VIDEO_FEED = 0;
@@ -156,8 +158,8 @@ void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 		printf("\nImage Saved\n");
 	}
 
-	//image = 0.25* (image + 100);
-	image = correctGamma(image, 1.2);	
+	//image = 0.25* (image + 200);
+	image = correctGamma(image, 0.9);	
 
 	Mat img;
 	cv::resize(image, img, cv::Size(), 0.25, 0.25);
@@ -191,7 +193,7 @@ void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 	cv::Mat image_copy = image;
 
 //----------------------- Need to Init
-	int ndetected = 0;
+	int ndetected = prevcorners.size();
 	if(ndetected < 50){
 		goodFeaturesToTrack( previmage,
 		prevcorners,
@@ -212,7 +214,7 @@ void imageCallback(const sensor_msgs::CompressedImageConstPtr& msg)
 	}
 
 //----------------------- LK
-	
+
 	std::vector<uchar> status;
 	std::vector<float> err;
 
@@ -241,7 +243,7 @@ ndetected = 0;
 	//Mat mask = Mat::zeros(image.size(), image.type());
 	vector<Scalar> colors;
 	RNG rng;
-	for(int i = 0; i < 100; i++)
+	for(int i = 0; i < MAX_FEATURE_COUNT; i++)
 	{
 		int r = rng.uniform(0, 256);
 		int g = rng.uniform(0, 256);
@@ -249,7 +251,8 @@ ndetected = 0;
 		colors.push_back(Scalar(r,g,b));
 	}
         vector<Point2f> good_new;
-       for(int i = 0; i < corners.size(); i = i + 5){
+       for(int i = 0; i < corners.size(); i = i + 1){
+
 
             // Select good points
             if(err[i] <= 100){
@@ -260,11 +263,12 @@ ndetected = 0;
             }
 
         }
+
 /*
 	Mat imgof;
         cv::add(frame, mask, imgof);
 	cv::resize(image_copy, imgof, cv::Size(), 0.50, 0.50);
-        if(SHOW_VIDEO_FEED == 1)imshow("Optical Flow", mask);
+        if(SHOW_FLOW == 1)imshow("Optical Flow", mask);
 */
 	
 
@@ -290,60 +294,21 @@ ndetected = 0;
 	if(SHOW_FLOW == 1){
 		cv::add(imgof, img, imgof);
 		imshow("Optical Flow", imgof);
+
+//		cv::resize(mask, mask, cv::Size(), 0.50, 0.50);
+//		cv::add(imgof,mask,imgof);
+		imshow("Optical Flow", imgof);
 	}
 	
 //----------------------- Epipolar Check
 
-	Mat rigidtransform = estimateRigidTransform(prevcorners, corners, 0);
+	//Mat rigidtransform = estimateRigidTransform(prevcorners, corners, 0);
 	//epipolarlines(previmage, image, prevcorners, corners);
-	cv::Mat fundM = cv::findFundamentalMat(prevcorners, corners, FM_8POINT);
+	//cv::Mat fundM = cv::findFundamentalMat(prevcorners, corners, FM_8POINT);
 
-	std::vector<cv::Vec3d> prevlines, lines;
-
-/*	computeCorrespondEpilines(prevcorners, 1, fundM, lines);
-    	cv::computeCorrespondEpilines(corners, 2, fundM, prevlines);
-
-	cv::Mat imagePointLeftCameraMatrix=cv::Mat_<double>(3,1);
-
-for(std::size_t i=0;i<lines.size();i=i+1)
-    {
-        cv::Vec3d l=lines.at(i);
-	double a=l.val[0];
-        double b=l.val[1];
-        double c=l.val[2];
-       
-        imagePointLeftCameraMatrix.at<double>(0,0)=prevcorners[i].x;
-        imagePointLeftCameraMatrix.at<double>(1,0)=prevcorners[i].y;
-        imagePointLeftCameraMatrix.at<double>(2,0)=1;
-        cv::Mat rightLineMatrix=fundM*imagePointLeftCameraMatrix;
-       
-        //drawing the line on the image
-        //ax+by+c=0
-
-        double x0,y0,x1,y1;
-        x0=0;
-        y0=(-c-a*x0)/b;
-	x1=image.cols;
-        y1=(-c-a*x1)/b;
- 
-	cv::line(image, cvPoint(x0,y0), cvPoint(x1,y1), cvScalar(0,255,0), 1);
-    }*/
+	//std::vector<cv::Vec3d> prevlines, lines;
 
 
-//----------------------- Prepare new cycle
-
-	if(PRINT_ALL == 1){
-		printf("|-------------------------------------------------------|\n\n");
-		printf("[%d detected] \n\n",ndetected);
-		cout << "Fundamental Matrix: \n";
-		cout << fundM;
-		cout << "\n\n";	
-		
-	}
-
-	std::swap(corners, prevcorners);
-	cv::swap(previmage, image);
-	destroyAllWindows;
 
 //----------------------- PUBLISH DATA
 /*
@@ -378,6 +343,23 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 */
 //----------------------- GET POSE
 
+	vector<Point2f> good_corners;
+	vector<Point2f> good_prevcorners;
+	for(int i = 0; i < corners.size(); i = i + 1){
+		    // Select good points
+		    if(err[i] <= 50){
+		        good_corners.push_back(corners[i]);
+			good_prevcorners.push_back(prevcorners[i]);
+		        // draw the tracks
+		        line(mask,corners[i], prevcorners[i], colors[i], 1);
+		        circle(frame, corners[i], 5, colors[i], -1);
+		    }
+
+		}
+	corners = good_corners;
+	prevcorners = good_prevcorners;
+
+
 	//FocalLength: [1.1055e+03 1.1051e+03]
 	//PrincipalPoint: [1.0376e+03 834.9490]
 
@@ -386,15 +368,38 @@ for(std::size_t i=0;i<lines.size();i=i+1)
 	Mat E, R, t, mask;
 
 	// Mat E = K.t() * F * K; // K = camera intrinsic matrix & F = Fundamental Matrix
-	E = findEssentialMat(prevcorners, corners, focal, pp, RANSAC, 0.999, 1.0, mask);
+	E = findEssentialMat(corners, prevcorners, focal, pp, RANSAC, 0.999, 1.0, mask);
 	recoverPose(E, corners, prevcorners, R, t, focal, pp, mask);
 
 
+//----------------------- Prepare new cycle
 
-	printf("\n\nROTATION AND TRANSLATION MATRIX:\n\n");
-	cout << "R = "<< endl << " "  << R << endl << endl;
-	cout << "t = "<< endl << " "  << t << endl << endl;
-	printf("\n\n");
+	std::swap(corners, prevcorners);
+	cv::swap(previmage, image);
+	destroyAllWindows;
+
+//-------------------------------------------------------------------------- PRINT FOR TXT LOGS
+//-------------------------------------------------------------------------- PRINT FOR TXT LOGS
+//-------------------------------------------------------------------------- PRINT FOR TXT LOGS
+
+	struct timeval tp;
+	gettimeofday(&tp, NULL);
+	long int ms = tp.tv_sec * 1000 + tp.tv_usec / 1000;
+
+	cout << ms << " ";
+
+	double* mtemp1 = &R.at<double>(0);
+	for(int i=0;i<9;i++)cout << mtemp1[i] << " ";
+
+	double* mtemp2 = &t.at<double>(0);
+	for(int i=0;i<3;i++)cout << mtemp2[i] << " ";
+
+	cout << endl;
+/*
+	cout << ms << endl;
+	cout << R << endl;
+	cout << t << endl;
+*/
 
 //----------------------- PUBLISH R&t DATA
 
